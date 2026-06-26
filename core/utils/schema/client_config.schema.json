@@ -1,0 +1,1091 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client_config.schema.json",
+  "title": "Client Config (PyME comercial LATAM)",
+  "description": "Esquema canónico del config.yml y archivos referenciados de un cliente bajo clients/<slug>/. Fuente de verdad cross-stack: motor Python (Sem 4-5) y sub-workflows n8n (Sem 3+). Materializa los tipos compuestos definidos en core/utils/config_loader.spec.md §3.1: EscalationPolicy, DiscountAuthorizationPolicy, StockPolicy, BusinessHours. Cualquier divergencia entre las dos implementaciones se resuelve volviendo a este schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "client",
+    "paths",
+    "bant_thresholds",
+    "disclosure",
+    "channels"
+  ],
+  "properties": {
+    "client": {
+      "$ref": "#/$defs/ClientMeta"
+    },
+    "mvp_focus": {
+      "$ref": "#/$defs/MvpFocus"
+    },
+    "baseline": {
+      "$ref": "#/$defs/Baseline"
+    },
+    "paths": {
+      "$ref": "#/$defs/Paths"
+    },
+    "bant_thresholds": {
+      "$ref": "#/$defs/BantThresholds"
+    },
+    "disclosure": {
+      "$ref": "#/$defs/DisclosurePolicy"
+    },
+    "channels": {
+      "$ref": "#/$defs/ChannelConfig"
+    },
+    "policies": {
+      "$ref": "#/$defs/PolicyBundle"
+    }
+  },
+  "allOf": [
+    {
+      "description": "Si WhatsApp está habilitado, requiere número E.164.",
+      "if": {
+        "properties": {
+          "channels": {
+            "properties": {
+              "whatsapp": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "channels": {
+            "properties": {
+              "whatsapp": {
+                "required": [
+                  "number_e164"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "BANT thresholds estrictamente ordenados: cold < warm < hot.",
+      "properties": {
+        "bant_thresholds": {
+          "type": "object",
+          "$comment": "Validación cruzada: hot.min_score > warm.min_score > cold.min_score se verifica en código del loader; JSON Schema no expresa comparación entre campos."
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ClientMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "display_name",
+        "country",
+        "language",
+        "timezone",
+        "currency",
+        "primary_contact"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "description": "Identificador estable del cliente. Coincide con el nombre de la carpeta bajo clients/."
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legal_name": {
+          "type": "string"
+        },
+        "vertical": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string",
+          "enum": [
+            "MX",
+            "CO",
+            "AR",
+            "CL",
+            "PE",
+            "EC",
+            "BO",
+            "UY",
+            "PY",
+            "VE",
+            "CR",
+            "PA",
+            "GT",
+            "SV",
+            "HN",
+            "NI",
+            "DO"
+          ],
+          "description": "ISO-3166-1 alpha-2 restringido a LATAM hispano del scope."
+        },
+        "city": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Z]{2,4})?$",
+          "description": "BCP-47. Ej: es-MX, es-CO."
+        },
+        "timezone": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z]+(/[A-Z][A-Za-z_]+)+$",
+          "description": "IANA tz database (ej. America/Mexico_City, America/Bogota)."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO-4217 (MXN, COP, ARS, ...)."
+        },
+        "primary_contact": {
+          "$ref": "#/$defs/NotifyTarget"
+        }
+      }
+    },
+    "NotifyTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "description": "Destinatario según canal: E.164 (`^\\+\\d{8,15}$`), email, channel id de Slack, o webhook URL."
+        },
+        "phone_e164": {
+          "type": "string",
+          "pattern": "^\\+\\d{8,15}$",
+          "description": "Compatibilidad legacy con config.yml: si presente, equivale a target con channel=whatsapp."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "whatsapp",
+            "email",
+            "slack",
+            "webhook"
+          ]
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "target"
+          ]
+        },
+        {
+          "required": [
+            "phone_e164"
+          ]
+        }
+      ]
+    },
+    "MvpFocus": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "primary": {
+          "$ref": "#/$defs/MvpFocusEntry"
+        },
+        "secondary": {
+          "$ref": "#/$defs/MvpFocusEntry"
+        },
+        "tertiary": {
+          "$ref": "#/$defs/MvpFocusEntry"
+        }
+      }
+    },
+    "MvpFocusEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metrics_target": {
+          "type": "string"
+        }
+      }
+    },
+    "Baseline": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Metadato libre para reportes/evals. El motor conversacional NO debe consumirlo."
+    },
+    "Paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompts"
+      ],
+      "properties": {
+        "catalog": {
+          "$ref": "#/$defs/RelPath"
+        },
+        "faqs": {
+          "$ref": "#/$defs/RelPath"
+        },
+        "few_shots": {
+          "$ref": "#/$defs/RelPath"
+        },
+        "segments": {
+          "$ref": "#/$defs/RelPath"
+        },
+        "knowledge_base": {
+          "$ref": "#/$defs/RelPath"
+        },
+        "prompts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tono",
+            "sobre_empresa"
+          ],
+          "properties": {
+            "tono": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "sobre_empresa": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "politica_comercial": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "extras": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/RelPath"
+              }
+            }
+          }
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "escalation": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "discount_authorization": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "stock_thresholds": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "business_hours": {
+              "$ref": "#/$defs/RelPath"
+            },
+            "discounts": {
+              "$ref": "#/$defs/RelPath",
+              "description": "Alias legacy de discount_authorization. El loader emite warning legacy_discount_fields_ignored si el archivo apuntado contiene tope autónomo (default.max_pct, by_segment, require_approval_above_pct)."
+            },
+            "opening_closing_copy": {
+              "$ref": "#/$defs/RelPath",
+              "description": "D-45: ruta al opening_closing.yaml del cliente. Materializa los slots {{tenant.opening_block}} y {{tenant.closing_block}} (ver core/prompts/system_template.spec.md §12). Opcional: si ausente, loader instancia defaults CORE y orquestador usa core/prompts/i18n/{opening,closing}_block_fallback_{lang}.txt."
+            },
+            "quote_policy": {
+              "$ref": "#/$defs/RelPath",
+              "description": "D-47: ruta al quote_policy.yaml del cliente. Materializa el sub-bundle QuotePolicy (umbral de visita física, copy del aviso de visita). Opcional: si ausente, loader instancia QuotePolicy con visit_required_above_amount=null (motor no fuerza visita) y fallback CORE para el mensaje. Ver core/tools/cotizar.spec.md §11 (visit branch)."
+            }
+          }
+        }
+      }
+    },
+    "RelPath": {
+      "type": "string",
+      "pattern": "^\\./",
+      "description": "Ruta relativa al directorio clients/<slug>/. Debe empezar con './'. El loader rechaza '..' y rutas absolutas (PathTraversalError)."
+    },
+    "BantThresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hot",
+        "warm",
+        "cold"
+      ],
+      "properties": {
+        "hot": {
+          "type": "object",
+          "required": [
+            "min_score"
+          ],
+          "properties": {
+            "min_score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "rules": {
+              "type": "array"
+            }
+          }
+        },
+        "warm": {
+          "type": "object",
+          "required": [
+            "min_score"
+          ],
+          "properties": {
+            "min_score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "cold": {
+          "type": "object",
+          "required": [
+            "min_score"
+          ],
+          "properties": {
+            "min_score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      }
+    },
+    "DisclosurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_identity",
+        "reveal_ai_on_direct_question",
+        "reveal_ai_in_first_message"
+      ],
+      "properties": {
+        "agent_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reveal_ai_on_direct_question": {
+          "type": "boolean",
+          "description": "CORE inviolable: el loader fuerza true si llega false y emite DisclosureGuardrailViolation warning."
+        },
+        "reveal_ai_in_first_message": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ChannelConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "whatsapp"
+      ],
+      "properties": {
+        "whatsapp": {
+          "type": "object",
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "number_e164": {
+              "type": "string",
+              "pattern": "^\\+\\d{8,15}$"
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "meta_cloud_api",
+                "twilio",
+                "360dialog",
+                "other"
+              ]
+            }
+          }
+        },
+        "web_widget": {
+          "type": "object",
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "email": {
+          "type": "object",
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "PolicyBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pre-bundle del policies/. Es opcional: si paths.policies está vacío, este objeto puede omitirse y el loader aplica defaults CORE.",
+      "properties": {
+        "escalation": {
+          "$ref": "#/$defs/EscalationPolicy"
+        },
+        "discount_authorization": {
+          "$ref": "#/$defs/DiscountAuthorizationPolicy"
+        },
+        "stock": {
+          "$ref": "#/$defs/StockPolicy"
+        },
+        "business_hours": {
+          "$ref": "#/$defs/BusinessHours"
+        },
+        "tax_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Tasa de impuesto fraccional (ej. 0.16 para IVA MX). null → motor no aplica impuesto."
+        },
+        "opening_closing_copy": {
+          "$ref": "#/$defs/OpeningClosingCopy"
+        },
+        "quote": {
+          "$ref": "#/$defs/QuotePolicy"
+        },
+        "segmentation": {
+          "$ref": "#/$defs/SegmentationPolicy"
+        }
+      }
+    },
+    "EscalationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "notify"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "notify": {
+          "$ref": "#/$defs/NotifyConfig"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "description": "Keywords adicionales a las CORE {AGENTE, HUMANO, ASESOR, PERSONA}. Pendiente de validar con el responsable del primer cliente."
+        },
+        "sla_business_hours": {
+          "type": "string",
+          "minLength": 1,
+          "default": "lo antes posible",
+          "description": "Texto que el agente promete al cliente dentro de horario hábil."
+        },
+        "sla_after_hours": {
+          "type": "string",
+          "minLength": 1,
+          "default": "el siguiente día hábil antes de las 10:00",
+          "description": "Texto que el agente promete al cliente fuera de horario hábil."
+        },
+        "hours": {
+          "$ref": "#/$defs/BusinessHoursRef"
+        },
+        "timezone": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z]+(/[A-Z][A-Za-z_]+)+$"
+        }
+      },
+      "$comment": "idempotency_window_min=10 y lockout_h=48 son CORE inviolables y NO aparecen en este schema (el cliente no puede setearlos)."
+    },
+    "NotifyConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "primary"
+      ],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "whatsapp",
+            "email",
+            "slack",
+            "webhook"
+          ]
+        },
+        "primary": {
+          "$ref": "#/$defs/NotifyTarget"
+        },
+        "on_call_rotation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OnCallSlot"
+          }
+        },
+        "group_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "OnCallSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ],
+      "properties": {
+        "weekday": {
+          "type": "string",
+          "pattern": "^(mon|tue|wed|thu|fri|sat|sun)(-(mon|tue|wed|thu|fri|sat|sun))?$"
+        },
+        "hours": {
+          "type": "string",
+          "pattern": "^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$"
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DiscountAuthorizationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Política asíncrona de descuentos. NO contiene tope autónomo: el agente nunca aplica descuento por iniciativa propia (CORE inviolable autonomy_pct=0). Solo configura el handshake con el responsable.",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "consultation_ttl_min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440,
+          "default": 30,
+          "description": "Tiempo máximo de espera por la respuesta del responsable. Pendiente de validar con el responsable del primer cliente."
+        },
+        "on_timeout": {
+          "type": "string",
+          "enum": [
+            "escalate",
+            "decline",
+            "ask_client_to_wait"
+          ],
+          "default": "ask_client_to_wait",
+          "description": "Qué hace el agente si el responsable no responde en el TTL. Pendiente de validar."
+        },
+        "notify_target": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Override opcional. Si null, cascada: cfg.policies.escalation.notify.primary.target → cfg.client.primary_contact.phone_e164."
+        },
+        "notify_channel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "whatsapp",
+            "email",
+            "slack",
+            "webhook",
+            null
+          ]
+        },
+        "context_to_share": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "include_customer_history": {
+              "type": "boolean",
+              "default": true
+            },
+            "include_segment": {
+              "type": "boolean",
+              "default": true
+            },
+            "include_competitor_mention": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "segment_overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "description": "Excepciones por segmento de cliente. Clave = `segment_id` que debe existir en `clients/<slug>/segments/buyer_personas.json` (cualquiera de `segmentos_observados[].id` o de los buyer personas). Si el cliente actual cae en un segmento listado, el flow `discount_authorization` NO consulta al responsable; ejecuta directamente el `action` configurado y le responde al cliente con el `decline_message_template`. Ver `core/flows/discount_authorization.spec.md` §5.5. Valor por-cliente, NO CORE. Default null/ausente → comportamiento idéntico al original (consultar siempre al responsable).",
+          "additionalProperties": {
+            "$ref": "#/$defs/SegmentDiscountOverride"
+          }
+        }
+      },
+      "$comment": "autonomy_pct=0 y max_retries_on_ask_client_to_wait=2 son CORE inviolables: el cliente NO puede setearlos. Si los declara, el loader los ignora y emite warning."
+    },
+    "SegmentDiscountOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "decline_message_template"
+      ],
+      "description": "Excepción de descuento aplicable a un segmento concreto del cliente. Materializa una regla comercial ya tomada y estable (ej. 'a este segmento no se le da descuento'), evitando preguntar al responsable cada vez.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "decline_no_consultation"
+          ],
+          "description": "Acción CORE a ejecutar cuando el cliente actual cae en este segmento. Único valor soportado en Sem 5; extensible en futuras versiones del schema."
+        },
+        "decline_message_template": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Texto del agente para el cliente cuando aplica el override. Admite placeholders estándar del flow (`{{currency}}`, `{{grand_total}}`, `{{customer_name}}`, etc.). Si renderiza vacío o falla, el flow cae al fallback CORE en `core/flows/i18n/discount_authorization_segment_decline_{lang}.txt`."
+        },
+        "reason_for_audit": {
+          "type": "string",
+          "description": "Texto interno (NO mostrado al cliente) persistido en `discount_authorizations.raw_metadata.segment_override.reason_for_audit` para auditoría y reportes."
+        }
+      }
+    },
+    "StockPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "states",
+        "hard_rules"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "thresholds_path": {
+          "type": "string"
+        },
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/StateDef"
+          }
+        },
+        "hard_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HardRule"
+          }
+        },
+        "supplier_pickup_attribute_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "default": "supplier_pickup_available",
+          "description": "D-46: key dentro de products.extra que indica si el SKU es vendible vía pickup en planta del proveedor cuando EXIST<=0. Convención CORE = `supplier_pickup_available`; override raro (solo por catálogo legacy heredado). Si la key no existe en un product.extra concreto, el motor asume false (comportamiento legacy de 4 estados). El motor lee el flag post-clasificación de estado y lo expone al LLM; los prompts del cliente componen el copy diferenciado."
+        }
+      },
+      "$comment": "stale_24h_warning=true y stale_48h_degrade=true son CORE inviolables."
+    },
+    "StateDef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "threshold": {
+          "type": [
+            "integer",
+            "object",
+            "null"
+          ]
+        },
+        "display_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "HardRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "trigger",
+        "action"
+      ],
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "escalate",
+            "block_quote",
+            "warn_agent"
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "BusinessHours": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "monday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "tuesday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "wednesday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "thursday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "friday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "saturday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "sunday": {
+          "$ref": "#/$defs/TimeRangeOrNull"
+        },
+        "timezone": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z]+(/[A-Z][A-Za-z_]+)+$"
+        },
+        "holidays": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "default": []
+        }
+      }
+    },
+    "TimeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        }
+      }
+    },
+    "TimeRangeOrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TimeRange"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$",
+          "description": "Formato compacto HH:MM-HH:MM, equivalente a {start,end}."
+        },
+        {
+          "type": "null",
+          "description": "Día cerrado."
+        }
+      ]
+    },
+    "BusinessHoursRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "inline"
+          ],
+          "properties": {
+            "kind": {
+              "const": "inline"
+            },
+            "inline": {
+              "$ref": "#/$defs/BusinessHours"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "link"
+          ],
+          "properties": {
+            "kind": {
+              "const": "link"
+            },
+            "link": {
+              "const": "cfg.policies.business_hours"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/BusinessHours",
+          "$comment": "Forma corta: el cliente declara directamente las horas inline sin envoltorio {kind:inline, inline:{...}}. El loader lo normaliza a kind=inline."
+        }
+      ]
+    },
+    "OpeningClosingCopy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D-45: copy turn-aware del agente. Materializa los slots opening_block (apertura del primer turno) y closing_block (cierre de la interacción) que el orquestador inyecta como envoltorio del cuerpo de respuesta del LLM. Mecanismo CORE; textos CONFIG. Ver docs/decision_log/d-45-copy-structure-saludo-cierre.md y docs/core_invariant.md §5.18.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Versión semver libre del YAML del cliente. Solo para auditoría."
+        },
+        "opening_template": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Texto del bloque de apertura. Se inyecta ANTES del cuerpo del LLM en el turno de apertura (ver emit_opening_on). Admite placeholders estándar del orquestador ({{primary_contact_name}}, {{display_name}}, ...). El disclosure reactivo (§5.12 core_invariant) se compone APARTE; este template NO lo reemplaza. Si null/ausente, fallback CORE en core/prompts/i18n/opening_block_fallback_{lang}.txt."
+        },
+        "closing_template": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Texto del bloque de cierre. Se inyecta DESPUÉS del cuerpo del LLM cuando se cumple emit_closing_on. Admite los placeholders adicionales {{escalation_keyword}} (primer elemento de cfg.policies.escalation.keywords) y {{escalation_keywords_join}} (lista unida con ' o '). FUENTE ÚNICA de keywords: cfg.policies.escalation.keywords. Si null/ausente, fallback CORE en core/prompts/i18n/closing_block_fallback_{lang}.txt."
+        },
+        "emit_opening_on": {
+          "type": "string",
+          "enum": [
+            "first_turn_in_conversation",
+            "first_turn_after_silence_24h"
+          ],
+          "default": "first_turn_in_conversation",
+          "description": "Cuándo el orquestador inyecta opening_block antes del cuerpo del LLM."
+        },
+        "emit_closing_on": {
+          "type": "string",
+          "enum": [
+            "phase_cierre",
+            "explicit_tool_call",
+            "never"
+          ],
+          "default": "phase_cierre",
+          "description": "Cuándo el orquestador inyecta closing_block después del cuerpo del LLM. 'phase_cierre' requiere TurnEnvelope.phase poblado (pendiente Sem 5: ver core/data_model/turn_envelope.spec.md). Mientras tanto, el loader emite warning phase_machine_not_implemented y los clientes pueden usar 'explicit_tool_call' o 'never'."
+        },
+        "fallback_lang": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z]{2,3}(-[A-Z]{2,4})?$",
+          "description": "Override del idioma BCP-47 para resolver el i18n fallback. Default (null): cfg.client.language."
+        }
+      },
+      "$comment": "PROHIBIDO declarar campo 'keywords' aquí (D-45 regla 9 del loader). FUENTE ÚNICA: cfg.policies.escalation.keywords. additionalProperties=false ya lo bloquea estructuralmente."
+    },
+    "QuotePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D-47: política de cotización del tenant. Hoy contiene el umbral de visita física para deals grandes (cuando grand_total > visit_required_above_amount, cotizar NO cierra autónomamente; dispara agendar(visita) con el primary_contact). El mecanismo del branch es CORE; el valor del umbral, el copy del aviso y la decisión de habilitarlo son CONFIG. Ver core/tools/cotizar.spec.md §11.",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "visit_required_above_amount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "Monto en la currency del cliente (cfg.client.currency) por encima del cual el agente NO cierra cotización autónomamente y dispara agendar(visita). null/ausente = el motor nunca fuerza el branch (comportamiento legacy). El motor compara grand_total > visit_required_above_amount; igualdad NO dispara."
+        },
+        "visit_required_message_template": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Texto que el agente envía al cliente final cuando el branch de visita se activa. Admite placeholders estándar del orquestador ({{primary_contact_name}}, {{display_name}}, {{currency}}, {{grand_total}}). Si null/ausente y el branch se dispara, el orquestador cae al fallback CORE en core/prompts/i18n/quote_visit_required_{lang}.txt."
+        },
+        "price_variability_attribute_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "default": "price_variability",
+          "description": "D-48: nombre de la key dentro de products.extra que contiene el objeto de precio variable por atributo {attribute,min,max,currency?,resolvable_by_attribute?}. Convencion CORE 'price_variability'; override raro, solo por catalogo legacy heredado (se registra como deuda en doc 11). Cuando un SKU lleva esta key, las tools devuelven unit_price=null + price_range + requires_attribute en vez de inventar un precio (refuerza el guardrail estructural 'no inventar precios'). Mismo tratamiento que StockPolicy.supplier_pickup_attribute_key (D-46). Ver core/tools/cotizar.spec.md PASO 0 y consultar_catalogo.spec.md seccion 4."
+        }
+      },
+      "$comment": "El branch de visita NO es escalación ni lockout; es ruta alterna de cierre via agendar(). La conversación NO entra en lockout 48h. Si además hay discount_pct_requested>0, la consulta de descuento queda absorbida por la visita (el responsable la resuelve in situ)."
+    },
+    "SegmentationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "core_invariant §5.22: política del clasificador de segmento del cliente en runtime. El MECANISMO (scoring reglas + LLM ligero de desempate, umbral con piso CORE, fallback a 'indeterminado') es CORE; los segmentos concretos, sus señales y min_confidence calibrado son CONFIG del tenant. candidate_segments NO se declara a mano: el loader lo proyecta desde clients/<slug>/segments/buyer_personas.json. GUARDRAIL INVIOLABLE: el segment_id calibra persona/tono/ruteo/BANT y resuelve segment_overrides; NUNCA autoriza, sugiere ni modifica un descuento (autonomy_pct=0 prevalece). Ver core/scoring/segmentation.spec.md.",
+      "properties": {
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1.0,
+          "default": 0.6,
+          "description": "Umbral de confianza bajo el cual el resultado es 'indeterminado' (comportamiento conservador). Calibrable por tenant. PISO CORE 0.5: el loader rechaza valores menores (SegmentationConfigInvalid) y aplica el default 0.6 con warning."
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Pesos por señal del matcher de reglas. Default CORE: iguales por señal."
+        },
+        "llm_tiebreak_margin": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.15,
+          "description": "Margen ganador-vs-runner_up que dispara el desempate por LLM ligero."
+        },
+        "candidate_segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SegmentDef"
+          },
+          "description": "Set de segmentos sobre el que se clasifica. NO se declara a mano: el loader lo proyecta desde buyer_personas.json del tenant. Vacío => clasificador retorna siempre 'indeterminate'."
+        }
+      }
+    },
+    "SegmentDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "description": "Forma genérica de un segmento (mecanismo CORE; contenido del tenant). El id viaja como string opaco (R1): el motor nunca nombra un segmento concreto.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Clave estable del segmento. CONFIG del tenant; string opaco para el motor."
+        },
+        "match_signals": {
+          "$ref": "#/$defs/SegmentMatchSignals"
+        },
+        "llm_description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Descripción en prosa para la ruta LLM ligera de desempate."
+        }
+      }
+    },
+    "SegmentMatchSignals": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pistas declarativas para el matcher por reglas. Todas opcionales; señales ausentes reducen evidencia (menor confianza), no penalizan.",
+      "properties": {
+        "product_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ticket_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "max"
+          ],
+          "properties": {
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            }
+          }
+        },
+        "authority_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeline_horizons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "keyword_hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

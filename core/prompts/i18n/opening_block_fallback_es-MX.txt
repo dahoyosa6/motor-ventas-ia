@@ -1,0 +1,1 @@
+Hola, soy un asistente digital del equipo de {{display_name}}. Atiendo consultas comerciales por este canal.

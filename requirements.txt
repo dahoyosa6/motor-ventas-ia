@@ -1,0 +1,25 @@
+# requirements.txt — entorno Python del proyecto "Agente de ventas IA"
+#
+# Instalar dentro del venv del proyecto:
+#   python3 -m venv .venv          # (una sola vez)
+#   .venv/bin/pip install -r requirements.txt
+#
+# Usar siempre .venv/bin/python3 para correr los scripts de scripts/.
+
+# --- Procesamiento de archivos crudos de clientes (raw_inputs/ -> processed_data/) ---
+xlrd==2.0.2          # leer .xls binario antiguo (exports de PoS/ERP del cliente)
+openpyxl             # leer/escribir .xlsx moderno
+pandas               # análisis tabular
+python-docx          # leer .docx
+python-pptx          # leer .pptx
+pdfplumber           # extraer texto y tablas de PDF
+
+# --- Runtime de los scripts existentes (ingesta a pgvector, segmentación) ---
+openai               # scripts/ingest_catalog_to_pgvector.py
+supabase             # idem
+python-dotenv        # carga de variables desde .env
+
+# --- Evals del agente (tests/evals/) ---
+anthropic            # tests/evals/run_agent_eval.py — LLM-as-judge
+jsonschema           # validación de schema de los datasets de eval
+pyyaml               # parse de policies/ + knowledge_base/ en validaciones

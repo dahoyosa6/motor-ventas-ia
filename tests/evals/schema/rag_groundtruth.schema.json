@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rag_groundtruth.schema.json",
+  "title": "RAG Ground Truth Query",
+  "description": "Esquema de una query del dataset tests/evals/rag_groundtruth.jsonl usado para medir Hit@3, MRR@10 y % no-alucinacion del RAG sobre el catalogo del tenant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "query_id",
+    "query_text",
+    "persona_id",
+    "query_type",
+    "difficulty",
+    "expected_sku",
+    "expected_any_of",
+    "expected_behavior",
+    "notes",
+    "created_by",
+    "created_at"
+  ],
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "pattern": "^Q[0-9]{2}$",
+      "description": "Identificador unico de la query (Q01..Q30)."
+    },
+    "query_text": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 500,
+      "description": "Texto literal que un cliente escribiria por WhatsApp. Puede incluir ruido realista (sin tildes, sin signos de apertura, typos leves, jerga)."
+    },
+    "persona_id": {
+      "type": "string",
+      "enum": [
+        "don_ramiro_ferreteria_chica",
+        "arq_carmen_residente_obra",
+        "sr_eduardo_mantenimiento_industrial",
+        "contratista_individual"
+      ],
+      "description": "ID de la buyer persona (sintetica) definida en clients/<tenant>/segments/buyer_personas.json. Personas ficticias de una ferreteria de ejemplo."
+    },
+    "query_type": {
+      "type": "string",
+      "enum": [
+        "sku_exacto",
+        "descripcion_aproximada",
+        "jerga",
+        "categoria_sin_sku",
+        "negativa"
+      ],
+      "description": "Tipo de query segun la metodologia de pendientes_david.md."
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard"],
+      "description": "Dificultad. easy=tokens literales del SKU; medium=sinonimo o presentacion coloquial sin ambiguedad; hard=jerga + ambiguedad o desambiguacion compleja."
+    },
+    "expected_sku": {
+      "type": ["string", "null"],
+      "description": "SKU unico canonico esperado. null para queries negativas o cuando hay multiples aceptables (usar expected_any_of)."
+    },
+    "expected_any_of": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Lista de SKUs aceptables como correctos. Array vacio [] para queries negativas. Hit@3 se calcula como expected_any_of intersecta top3."
+    },
+    "expected_behavior": {
+      "type": "string",
+      "enum": ["match", "no_match"],
+      "description": "match=el RAG debe devolver al menos un SKU del expected_any_of en top3. no_match=el RAG NO debe devolver ningun SKU con confianza > umbral (queries negativas)."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Justificacion breve: por que esta query existe, que aspecto del RAG sondea, referencia al insumo (frase tipica X, par confuso Y, etc.)."
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Autor de la query (humano o agente)."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Fecha ISO 8601 de creacion (YYYY-MM-DD)."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "expected_behavior": { "const": "no_match" } } },
+      "then": {
+        "properties": {
+          "expected_sku": { "const": null },
+          "expected_any_of": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "expected_behavior": { "const": "match" } } },
+      "then": {
+        "properties": {
+          "expected_any_of": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}

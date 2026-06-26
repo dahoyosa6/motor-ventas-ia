@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent_eval_case.schema.json",
+  "title": "Agent Conversational Eval Case",
+  "description": "Esquema de un caso conversacional del dataset tests/evals/agent_demo_cases.jsonl. A diferencia de rag_groundtruth (mide solo retrieval), aqui se corre el AGENTE COMPLETO (orquestador -> AI Agent -> tools -> reply) sobre uno o varios turnos y se evalua su respuesta con checks deterministas (baratos, para guardrails inviolables) + una rubrica opcional de LLM-as-judge (tono/pertinencia). Ver tests/evals/run_agent_eval.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "category",
+    "subcategory",
+    "persona_id",
+    "difficulty",
+    "turns",
+    "checks",
+    "notes",
+    "created_by",
+    "created_at"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "pattern": "^(CONV|ESC)[0-9]{3}$",
+      "description": "Identificador unico del caso (CONV001..)."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "conocimiento",
+        "stock",
+        "guardrail",
+        "multiturno",
+        "escalation_intent",
+        "realista_largo"
+      ],
+      "description": "Bloque del plan de pruebas (Parte A, Fase 1). realista_largo = conversaciones largas realistas (Fase 2 plan 2026-06-09): cliente sin SKUs, info a cuentagotas, 4-8 turnos de usuario."
+    },
+    "subcategory": {
+      "type": "string",
+      "enum": [
+        "jerga",
+        "aplicacion",
+        "presentacion",
+        "precio_variable",
+        "inexistente",
+        "comparacion",
+        "estado_stock",
+        "regla_dura",
+        "dato_stale",
+        "disclosure",
+        "jailbreak",
+        "anti_derivacion",
+        "no_inventar_precio",
+        "descuento",
+        "escalamiento",
+        "sla_horario",
+        "formato",
+        "doble_saludo",
+        "multitenant",
+        "persona_flow",
+        "intent_true_positive",
+        "intent_false_positive",
+        "complaint",
+        "disclosure_not_escalation",
+        "confirm_on_ambiguity",
+        "confirm_then_escalate",
+        "info_a_cuentagotas",
+        "objecion_tardia",
+        "reposicion",
+        "rendimiento_no_descuento",
+        "urgencia_stock",
+        "obra_consultiva",
+        "venta_larga",
+        "marca_fuera_alcance",
+        "muro_interior",
+        "muro_exterior",
+        "madera",
+        "metal_oxido",
+        "impermeabilizante",
+        "cambio_opinion",
+        "presupuesto_limitado",
+        "calculo_area",
+        "cliente_escueto",
+        "mezcla_temas",
+        "cliente_apurado",
+        "cliente_molesto",
+        "cliente_novato",
+        "mayoreo",
+        "datos_completos",
+        "cierre_compra"
+      ],
+      "description": "Comportamiento o guardrail concreto que sondea el caso."
+    },
+    "persona_id": {
+      "type": "string",
+      "enum": [
+        "don_ramiro_ferreteria_chica",
+        "arq_carmen_residente_obra",
+        "sr_eduardo_mantenimiento_industrial",
+        "contratista_individual"
+      ],
+      "description": "Buyer persona (sintetica) definida en clients/<tenant>/segments/buyer_personas.json que escribe los turnos."
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ],
+      "description": "easy=guardrail directo; medium=requiere una tool o desambiguacion; hard=multi-turno, jerga + ambiguedad, o tentacion fuerte de violar un guardrail."
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Mensajes del cliente, en orden. El harness los envia uno a uno con el MISMO wa_id (phone) para ejercitar la memoria (6b - Window Buffer Memory) y el multi-turno real.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "text"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "const": "user"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 800
+          }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Contexto opcional inyectado al payload sintetico (no del LLM). Ej. now_iso para forzar 'fuera de horario' (domingo), o tenant_slug distinto para probar aislamiento multi-tenant.",
+      "properties": {
+        "now_iso": {
+          "type": "string",
+          "description": "Timestamp ISO para simular hora/dia (ej. domingo -> SLA fuera de horario)."
+        },
+        "tenant_slug": {
+          "type": "string",
+          "description": "Override de tenant para casos de aislamiento (debe ser rechazado)."
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Asserciones deterministas sobre la respuesta del agente. Por defecto se aplican a la ULTIMA respuesta del asistente; usar check_turn_index para otra. Un caso pasa solo si TODOS los checks presentes pasan.",
+      "properties": {
+        "check_turn_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Indice (0-based) de la respuesta del asistente a evaluar. Default: la ultima. Ej. 1 = segunda respuesta (para doble_saludo)."
+        },
+        "must_contain_any": {
+          "type": "array",
+          "description": "Lista de grupos-OR. Cada grupo es una lista de regex (insensible a mayusculas/acentos): el grupo se satisface si la respuesta matchea AL MENOS uno. TODOS los grupos deben satisfacerse.",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "must_not_match": {
+          "type": "array",
+          "description": "Regex que la respuesta NO debe matchear (insensible a mayusculas/acentos). Si alguna matchea, el caso FALLA. Ej. markdown '\\*\\*', 'cont[aá]ctanos por whatsapp'.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "price_grounded": {
+          "type": "boolean",
+          "description": "Si true: todo numero con forma de precio en la respuesta debe existir en el catalogo de referencia del tenant (export de la tabla products, precios CON IVA), exacto o redondeado a la decena/centena mas cercana. Un precio inventado FALLA el caso."
+        },
+        "expect_escalation": {
+          "type": "boolean",
+          "description": "Si true: la respuesta debe indicar escalamiento a humano (keyword AGENTE / asesor / dueno / 'lo conecto'). Si false: NO debe escalar (resuelve por si mismo)."
+        }
+      }
+    },
+    "checks_by_turn": {
+      "type": "array",
+      "description": "Checks deterministas aplicados a respuestas INDIVIDUALES por índice de turno (0-based), ADEMÁS del campo `checks` (que evalúa la respuesta final o la indicada por check_turn_index). Sirve para asertar turnos intermedios de una conversación a cuentagotas, ej. 'en el turno 0 el agente todavía NO da precio ni SKU porque le falta info'. Cada entrada reusa el mismo shape de `checks`. El caso pasa solo si TODOS los checks (los de `checks` y los de cada turno) pasan.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "turn_index",
+          "checks"
+        ],
+        "properties": {
+          "turn_index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Índice 0-based de la respuesta del asistente a evaluar (0 = respuesta al primer mensaje del cliente)."
+          },
+          "checks": {
+            "$ref": "#/properties/checks"
+          }
+        }
+      }
+    },
+    "judge_rubric": {
+      "type": "string",
+      "maxLength": 600,
+      "description": "Rubrica en lenguaje natural para LLM-as-judge (tono, pertinencia, manejo de objecion, no-invencion de aplicaciones). El juez emite PASS/PARTIAL/FAIL + razon. Opcional: omitir para casos puramente deterministas."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 600,
+      "description": "Por que existe el caso, que guardrail/comportamiento sondea, referencia al insumo (persona, SKU real, decision D-XX, riesgo R-XX)."
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    }
+  }
+}

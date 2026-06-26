@@ -1,0 +1,85 @@
+# Punto de entrada del cliente — Clínica Demo Bienestar
+# =====================================================================
+# TENANT DE PRUEBA. No es un cliente real. Existe solo para validar T1
+# (la "Regla de Oro": cambiar de cliente tocando únicamente
+# clients/<cliente>/, sin tocar el motor ni el workflow del orquestador).
+#
+# Mismo ESQUEMA que cualquier otro tenant, valores distintos a propósito:
+# otro slug, otro display_name, otro tono, otro catálogo (insumos médicos).
+# Si el agente respondiera con rastro de OTRO tenant, T1 falla.
+# =====================================================================
+
+client:
+  slug: clinica_demo
+  display_name: "Clínica Demo Bienestar"
+  legal_name: "Clínica Demo Bienestar S.C."
+  vertical: "clínica de salud con venta de insumos médicos"
+  country: "MX"
+  city: "Ciudad Demo"
+  language: "es-MX"
+  timezone: "America/Mexico_City"
+  currency: "MXN"
+  primary_contact:
+    name: "Dra. Demo"
+    phone_e164: "+5215555559999"
+    channel: "whatsapp"
+
+# Foco MVP — ficticio, solo para completar el esquema.
+mvp_focus:
+  primary:
+    label: "Venta de insumos médicos básicos a pacientes y consultorios chicos por WhatsApp"
+    metrics_target: "tenant de prueba — sin meta real"
+  secondary:
+    label: "Agendar cita de valoración"
+  tertiary:
+    label: "Reactivar pacientes inactivos"
+
+# Baseline — valores ficticios; este tenant no tiene datos reales de negocio.
+baseline:
+  data_window_months: 0
+  total_transactions: 0
+  total_revenue_mxn: 0
+  average_ticket_mxn: 0
+  conversion_leads_to_sales: 0
+  total_unique_customers: 0
+  active_customers_last_16m: 0
+  dormant_customers: 0
+  revenue_trend_pct: 0
+  notes: |
+    Tenant sintético para la validación T1 del POC. Sin baseline real.
+
+# Rutas relativas a esta carpeta. Solo se incluyen los archivos que este
+# tenant de prueba realmente tiene; el resto del scaffold (faqs, segments,
+# policies, knowledge_base) no aplica a un cliente demo.
+paths:
+  catalog: "./catalog/catalogo_clinica_demo.csv"
+  prompts:
+    tono: "./prompts/tono.md"
+    sobre_empresa: "./prompts/sobre_empresa.md"
+
+# Calibración del scoring BANT — valores demo.
+bant_thresholds:
+  hot:
+    min_score: 80
+    rules: []
+  warm:
+    min_score: 50
+  cold:
+    min_score: 0
+
+# Disclosure — mismo mecanismo para todo tenant, identidad distinta.
+disclosure:
+  agent_identity: "asistente digital de Clínica Demo Bienestar"
+  reveal_ai_on_direct_question: true
+  reveal_ai_in_first_message: false
+
+# Canales habilitados.
+channels:
+  whatsapp:
+    enabled: true
+    number_e164: "+5215555559999"
+    provider: "meta_cloud_api"
+  web_widget:
+    enabled: false
+  email:
+    enabled: false
